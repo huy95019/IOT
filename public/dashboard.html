@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Smart Irrigation Dashboard</title>
+
+<!-- Paho MQTT (WebSocket) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.1.0/mqttws31.min.js"></script>
+
+<!-- Firebase SDK v8 -->
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+<!-- Chart JS -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body { font-family: Arial, sans-serif; background: #f4f6f9; padding: 30px; }
+.card { background: white; padding: 20px; margin-bottom: 20px; border-radius: 10px; box-shadow: 0 0 8px rgba(0,0,0,0.1); }
+button { padding: 10px 20px; margin-right: 10px; border: none; border-radius: 6px; cursor: pointer; }
+.on-btn { background: #28a745; color: white; }
+.low-btn { background: #ffc107; color: black; }
+.off-btn { background: #dc3545; color: white; }
+</style>
+</head>
+
+<body>
+<h1>🌿 Smart Irrigation Dashboard</h1>
+<button class="logout" onclick="logout()">Đăng xuất</button>
+
+<!-- PUMP CONTROL -->
+<div class="card">
+    <h2>📡 Điều khiển máy bơm</h2>
+    <p>Trạng thái hiện tại: <span id="pumpState">Loading...</span></p>
+
+    <button class="on-btn" onclick="sendCommand('ON')">BẬT MẠNH</button>
+    <button class="low-btn" onclick="sendCommand('LOW')">BẬT NHẸ</button>
+    <button class="off-btn" onclick="sendCommand('OFF')">TẮT</button>
+
+    <br><br>
+
+    <label>Tốc độ:
+      <input type="range" min="0" max="255" id="speedRange" value="0" oninput="speedPreview(this.value)">
+    </label>
+    <button onclick="sendSpeed()">Set Speed</button>
+</div>
+
+<!-- SENSOR DATA -->
+<div class="card">
+    <h2>📊 Dữ liệu cảm biến real-time</h2>
+    <p>Nhiệt độ: <span id="temp">--</span> °C</p>
+    <p>Độ ẩm không khí: <span id="humi">--</span> %</p>
+    <p>Độ ẩm đất: <span id="soil">--</span></p>
+</div>
+
+<!-- SOIL CHART -->
+<div class="card">
+    <canvas id="soilChart" height="120"></canvas>
+</div>
+
+<script>
+/* =================================================
+   0) CHECK JWT TOKEN
+================================================= */
+const token = localStorage.getItem("token");
+if (!token) {
+    alert("Bạn chưa đăng nhập!");
+    window.location.href = "login.html";
+}
+/* ==========================================
+   FIREBASE INIT
+========================================== */
+var firebaseConfig = {
+  apiKey: "AIzaSyBtX1ov851j-RAf9ZBtMgXKyTFcHXOcvKw",
+  authDomain: "httc-696a3.firebaseapp.com",
+  databaseURL: "https://httc-696a3-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "httc-696a3",
+  storageBucket: "httc-696a3.firebasestorage.app",
+  messagingSenderId: "890032200756",
+  appId: "1:890032200756:web:a561fcb9b799a5dba8be61"
+};
+
+firebase.initializeApp(firebaseConfig);
+let db = firebase.database();
+
+/* SENSOR REALTIME UI UPDATE */
+db.ref("sensor").on("value", snap => {
+    const s = snap.val() || {};
+
+    if (s.temp) document.getElementById("temp").innerText = s.temp.value ?? s.temp;
+    if (s.humi) document.getElementById("humi").innerText = s.humi.value ?? s.humi;
+    if (s.soil) {
+      let soilVal = s.soil.value ?? s.soil;
+      document.getElementById("soil").innerText = soilVal;
+      addSoilData(soilVal);
+    }
+});
+
+/* PUMP STATE FROM FIREBASE */
+db.ref("pump/state").on("value", snap => {
+    document.getElementById("pumpState").innerText = snap.val() || "--";
+});
+
+/* ==========================================
+   MQTT WEBSOCKET → HIVE MQ CLOUD
+========================================== */
+var host = "e68c201b89484d92ac83e57b5ac0d2be.s1.eu.hivemq.cloud";
+var port = 8884;   // WSS
+var path = "/mqtt";
+var clientId = "dashboard-" + Math.floor(Math.random() * 99999);
+
+var client = new Paho.MQTT.Client(host, Number(port), path, clientId);
+
+client.onConnectionLost = (res) => {
+    console.log("MQTT lost:", res.errorMessage);
+};
+
+client.onMessageArrived = (msg) => {
+    console.log("MQTT in:", msg.destinationName, msg.payloadString);
+
+    if (msg.destinationName === "iot/plant/pump/state") {
+        document.getElementById("pumpState").innerText = msg.payloadString;
+    }
+};
+
+client.connect({
+    useSSL: true,
+    userName: "HuyNong",
+    password: "Quanghuy2004",
+    mqttVersion: 4,
+    onSuccess: () => {
+      console.log("MQTT WebSocket connected!");
+
+      // ĐÚNG TOPIC ESP32 ĐANG DÙNG
+      client.subscribe("iot/plant/#");
+    }
+});
+
+/* ==========================================
+   SEND COMMAND TO PUMP
+========================================== */
+function sendCommand(cmd) {
+    // 1) Firebase → Node Bridge → MQTT → ESP32
+    db.ref("commands/pump_set").set(String(cmd));
+
+    // 2) MQTT trực tiếp
+    var msg = new Paho.MQTT.Message(String(cmd));
+    msg.destinationName = "iot/plant/pump/set";  // FIXED
+    client.send(msg);
+
+    document.getElementById("pumpState").innerText = cmd;
+}
+
+/* SEND SPEED */
+function sendSpeed() {
+    const v = document.getElementById("speedRange").value;
+
+    db.ref("commands/pump_speed").set(Number(v));
+
+    var m = new Paho.MQTT.Message(String(v));
+    m.destinationName = "iot/plant/pump/speed"; // FIXED
+    client.send(m);
+}
+
+function speedPreview(v) {
+    console.log("Speed:", v);
+}
+
+/* ==========================================
+   SOIL CHART
+========================================== */
+let soilChart = new Chart(document.getElementById("soilChart"), {
+    type: "line",
+    data: { 
+        labels: [], 
+        datasets: [{ 
+            label: "Độ ẩm đất", 
+            data: [], 
+            borderWidth: 2 
+        }] 
+    },
+    options: { animation: false, responsive: true }
+});
+
+function addSoilData(v) {
+    soilChart.data.labels.push("");
+    soilChart.data.datasets[0].data.push(Number(v));
+
+    if (soilChart.data.labels.length > 50) {
+        soilChart.data.labels.shift();
+        soilChart.data.datasets[0].data.shift();
+    }
+
+    soilChart.update();
+}
+</script>
+
+</body>
+</html>
