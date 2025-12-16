@@ -26,7 +26,7 @@ app.use(express.json());
 app.use(express.static("public"));
 
 // 👉 TRANG CHỦ → LOGIN
-app.get("/", (req, res) => {
+app.get("/", (_req, res) => {
   res.sendFile(path.resolve("public/login.html"));
 });
 
