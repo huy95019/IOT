@@ -1,4 +1,3 @@
-// server.js
 import mqtt from "mqtt";
 import admin from "firebase-admin";
 import mongoose from "mongoose";
@@ -9,6 +8,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 
+// Giả định các models này có trường 'email'
 import User from "./models/User.js";
 import SensorLog from "./models/SensorLog.js";
 
@@ -27,6 +27,7 @@ app.use(express.static("public"));
 
 // 👉 TRANG CHỦ → LOGIN
 app.get("/", (_req, res) => {
+  // Đảm bảo bạn có file public/login.html
   res.sendFile(path.resolve("public/login.html"));
 });
 
@@ -117,24 +118,39 @@ mqttClient.on("message", async (topic, payload) => {
 
 /* ===================== AUTH API ===================== */
 
-// REGISTER (chạy 1 lần → xong thì xóa)
+// REGISTER (SỬA ĐỔI: Sử dụng email thay vì username)
 app.post("/api/register", async (req, res) => {
   const hash = await bcrypt.hash(req.body.password, 10);
   const user = await User.create({
-    username: req.body.username,
+    // Đã sửa: Lấy email từ body
+    email: req.body.email, 
     password: hash
   });
   res.json(user);
 });
 
-// LOGIN (dùng cho login.html)
+// LOGIN (SỬA ĐỔI: Sử dụng email thay vì username)
 app.post("/api/login", async (req, res) => {
-  const user = await User.findOne({ username: req.body.username });
-  if (!user) return res.status(401).json({ msg: "User not found" });
+  // Lấy email và password từ body của yêu cầu POST
+  const { email, password } = req.body; 
 
-  const ok = await bcrypt.compare(req.body.password, user.password);
-  if (!ok) return res.status(401).json({ msg: "Wrong password" });
+  // Tìm kiếm người dùng bằng email
+  const user = await User.findOne({ email });
+  
+  // Nếu không tìm thấy người dùng
+  if (!user) {
+    return res.status(401).json({ msg: "Email hoặc Mật khẩu không đúng." });
+  }
 
+  // So sánh mật khẩu đã nhập với mật khẩu đã mã hóa trong database
+  const ok = await bcrypt.compare(password, user.password);
+  
+  // Nếu mật khẩu không khớp
+  if (!ok) {
+    return res.status(401).json({ msg: "Email hoặc Mật khẩu không đúng." });
+  }
+
+  // Tạo và trả về JWT token
   const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "1d" });
   res.json({ token });
 });
