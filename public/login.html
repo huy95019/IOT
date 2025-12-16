@@ -44,7 +44,7 @@
             padding: 10px;
             border: 1px solid #ccc;
             border-radius: 5px;
-            box-sizing: border-box; /* Quan trọng để padding không làm tăng chiều rộng */
+            box-sizing: border-box;
         }
 
         button {
@@ -70,8 +70,8 @@
         <h2>Đăng Nhập Hệ Thống</h2>
         <form onsubmit="event.preventDefault(); login();">
             <div class="input-group">
-                <label for="username">Tên người dùng (u):</label>
-                <input type="text" id="u" required>
+                <label for="email">Địa chỉ Email (e):</label>
+                <input type="email" id="e" required>
             </div>
             <div class="input-group">
                 <label for="password">Mật khẩu (p):</label>
@@ -83,13 +83,14 @@
 
     <script>
         // Lấy tham chiếu đến các ô input bằng id
-        const u = document.getElementById('u');
+        // Đã cập nhật từ 'u' (username) thành 'e' (email)
+        const e = document.getElementById('e');
         const p = document.getElementById('p');
 
         async function login() {
-            // Kiểm tra xem các ô input đã được tham chiếu đúng chưa
-            if (!u || !p) {
-                alert("Lỗi: Không tìm thấy ô nhập tên người dùng hoặc mật khẩu.");
+            // Kiểm tra các ô input
+            if (!e || !p) {
+                alert("Lỗi: Không tìm thấy ô nhập email hoặc mật khẩu.");
                 return;
             }
 
@@ -97,14 +98,14 @@
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    username: u.value,
+                    // CẬP NHẬT: Gửi 'email' thay vì 'username'
+                    email: e.value,
                     password: p.value
                 })
             });
 
             if (res.ok) {
                 const d = await res.json();
-                // Giả định rằng server trả về một đối tượng JSON có thuộc tính 'token'
                 if (d && d.token) {
                      localStorage.setItem("token", d.token);
                      location.href = "dashboard.html";
@@ -113,15 +114,14 @@
                 }
 
             } else {
-                // Đọc thông báo lỗi cụ thể từ server nếu có (Tùy chọn)
-                let errorMessage = "Đăng nhập thất bại. Vui lòng kiểm tra lại tên người dùng và mật khẩu.";
+                let errorMessage = "Đăng nhập thất bại. Vui lòng kiểm tra lại email và mật khẩu.";
                 try {
                     const errorData = await res.json();
                     if (errorData && errorData.message) {
                         errorMessage = errorData.message;
                     }
-                } catch (e) {
-                    // Nếu không phải JSON, dùng thông báo mặc định
+                } catch (error) {
+                    // Bỏ qua lỗi nếu server không trả về JSON
                 }
                 alert(errorMessage);
             }
