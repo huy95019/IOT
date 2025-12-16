@@ -1,20 +1,131 @@
-<script>
-async function login() {
-  const res = await fetch("/api/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      username: u.value,
-      password: p.value
-    })
-  });
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Trang Đăng Nhập</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f4f7f6;
+            margin: 0;
+        }
 
-  if (res.ok) {
-    const d = await res.json();
-    localStorage.setItem("token", d.token);
-    location.href = "dashboard.html";
-  } else {
-    alert("Login failed");
-  }
-}
-</script>
+        .login-container {
+            background-color: #ffffff;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            width: 300px;
+        }
+
+        h2 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 25px;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box; /* Quan trọng để padding không làm tăng chiều rộng */
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="login-container">
+        <h2>Đăng Nhập Hệ Thống</h2>
+        <form onsubmit="event.preventDefault(); login();">
+            <div class="input-group">
+                <label for="username">Tên người dùng (u):</label>
+                <input type="text" id="u" required>
+            </div>
+            <div class="input-group">
+                <label for="password">Mật khẩu (p):</label>
+                <input type="password" id="p" required>
+            </div>
+            <button type="submit">Đăng Nhập</button>
+        </form>
+    </div>
+
+    <script>
+        // Lấy tham chiếu đến các ô input bằng id
+        const u = document.getElementById('u');
+        const p = document.getElementById('p');
+
+        async function login() {
+            // Kiểm tra xem các ô input đã được tham chiếu đúng chưa
+            if (!u || !p) {
+                alert("Lỗi: Không tìm thấy ô nhập tên người dùng hoặc mật khẩu.");
+                return;
+            }
+
+            const res = await fetch("/api/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    username: u.value,
+                    password: p.value
+                })
+            });
+
+            if (res.ok) {
+                const d = await res.json();
+                // Giả định rằng server trả về một đối tượng JSON có thuộc tính 'token'
+                if (d && d.token) {
+                     localStorage.setItem("token", d.token);
+                     location.href = "dashboard.html";
+                } else {
+                     alert("Đăng nhập thành công nhưng không nhận được token.");
+                }
+
+            } else {
+                // Đọc thông báo lỗi cụ thể từ server nếu có (Tùy chọn)
+                let errorMessage = "Đăng nhập thất bại. Vui lòng kiểm tra lại tên người dùng và mật khẩu.";
+                try {
+                    const errorData = await res.json();
+                    if (errorData && errorData.message) {
+                        errorMessage = errorData.message;
+                    }
+                } catch (e) {
+                    // Nếu không phải JSON, dùng thông báo mặc định
+                }
+                alert(errorMessage);
+            }
+        }
+    </script>
+</body>
+</html>
