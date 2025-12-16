@@ -1,22 +1,20 @@
-<h2>Login</h2>
-<input id="u" placeholder="username">
-<input id="p" type="password">
-<button onclick="login()">Login</button>
-
 <script>
 async function login() {
-  const res = await fetch("/login", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body:JSON.stringify({
-      username:u.value,
-      password:p.value
+  const res = await fetch("/api/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      username: u.value,
+      password: p.value
     })
   });
-  if(res.ok){
+
+  if (res.ok) {
     const d = await res.json();
-    localStorage.token = d.token;
+    localStorage.setItem("token", d.token);
     location.href = "dashboard.html";
-  } else alert("Login failed");
+  } else {
+    alert("Login failed");
+  }
 }
 </script>

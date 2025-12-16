@@ -7,6 +7,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
 
 import User from "./models/User.js";
 import SensorLog from "./models/SensorLog.js";
@@ -21,9 +22,18 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// 👉 SERVE FRONTEND
+app.use(express.static("public"));
+
+// 👉 TRANG CHỦ → LOGIN
+app.get("/", (req, res) => {
+  res.sendFile(path.resolve("public/login.html"));
+});
+
 /* ===================== MONGODB ===================== */
 if (!process.env.MONGO_URI) {
-  throw new Error("❌ Missing MONGO_URI environment variable");
+  console.error("❌ Missing MONGO_URI");
+  process.exit(1);
 }
 
 mongoose
@@ -36,15 +46,16 @@ mongoose
 
 /* ===================== FIREBASE ===================== */
 if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
-  throw new Error("❌ Missing FIREBASE_SERVICE_ACCOUNT environment variable");
+  console.error("❌ Missing FIREBASE_SERVICE_ACCOUNT");
+  process.exit(1);
 }
 
 let serviceAccount;
 try {
   serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 } catch (err) {
-  console.error("❌ FIREBASE_SERVICE_ACCOUNT is not valid JSON");
-  throw err;
+  console.error("❌ FIREBASE_SERVICE_ACCOUNT invalid JSON");
+  process.exit(1);
 }
 
 admin.initializeApp({
@@ -54,6 +65,7 @@ admin.initializeApp({
 });
 
 const db = admin.database();
+console.log("✔ Firebase initialized");
 
 /* ===================== MQTT ===================== */
 const mqttClient = mqtt.connect(
@@ -104,6 +116,8 @@ mqttClient.on("message", async (topic, payload) => {
 });
 
 /* ===================== AUTH API ===================== */
+
+// REGISTER (chạy 1 lần → xong thì xóa)
 app.post("/api/register", async (req, res) => {
   const hash = await bcrypt.hash(req.body.password, 10);
   const user = await User.create({
@@ -113,6 +127,7 @@ app.post("/api/register", async (req, res) => {
   res.json(user);
 });
 
+// LOGIN (dùng cho login.html)
 app.post("/api/login", async (req, res) => {
   const user = await User.findOne({ username: req.body.username });
   if (!user) return res.status(401).json({ msg: "User not found" });
@@ -124,7 +139,7 @@ app.post("/api/login", async (req, res) => {
   res.json({ token });
 });
 
-/* ===================== COMMAND API ===================== */
+/* ===================== AUTH MIDDLEWARE ===================== */
 function auth(req, res, next) {
   try {
     const token = req.headers.authorization?.split(" ")[1];
@@ -135,6 +150,7 @@ function auth(req, res, next) {
   }
 }
 
+/* ===================== COMMAND API ===================== */
 app.post("/api/pump", auth, (req, res) => {
   db.ref("commands/pump_set").set(req.body.state);
   res.json({ ok: true });
